@@ -1,0 +1,12 @@
+{
+  "name": "split — stem separator",
+  "short_name": "split",
+  "description": "Split a song into vocals, drums, bass, guitar, piano and other stems, entirely in the browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1013",
+  "theme_color": "#0e1013",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

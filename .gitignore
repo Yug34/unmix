@@ -1,0 +1,8 @@
+# Model weights: 130 MB, fetched separately (see README)
+static/models/*.onnx
+
+# Local test fixtures
+static/_test/
+
+# OS noise
+.DS_Store
