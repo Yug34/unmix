@@ -1,38 +1,60 @@
 /* Turning stems into files: MP3 encoding (in a worker) and a minimal zip. */
 
-const ENCODER = { worker: null, queue: null };
+/* lamejs runs at maybe 15x realtime on one core, so six five-minute stems in a
+ * single worker is a couple of minutes of waiting. Each job gets its own
+ * worker instead; the stems are independent, and the cores are idle once
+ * separation has finished. Workers are spun up per call and discarded -- they
+ * hold the lamejs heap, and keeping six of those around between exports is
+ * memory the stems themselves need. */
+const MAX_WORKERS = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 4) - 1));
 
-function encoder() {
-  if (!ENCODER.worker) {
-    ENCODER.worker = new Worker('/encode.worker.js');
-    ENCODER.worker.onmessage = (e) => {
+function encodeOne(job, sampleRate, bitrate, onProgress) {
+  return new Promise((resolve, reject) => {
+    const w = new Worker('/encode.worker.js');
+    w.onmessage = (e) => {
       const m = e.data;
-      if (!ENCODER.queue) return;
-      if (m.type === 'progress') ENCODER.queue.onProgress?.(m);
-      else if (m.type === 'done') { const q = ENCODER.queue; ENCODER.queue = null; q.resolve(m.results); }
-      else if (m.type === 'error') { const q = ENCODER.queue; ENCODER.queue = null; q.reject(new Error(m.error)); }
+      if (m.type === 'progress') onProgress?.(m.pct);
+      else if (m.type === 'done') { w.terminate(); resolve(m.results[0]); }
+      else if (m.type === 'error') { w.terminate(); reject(new Error(m.error)); }
     };
-  }
-  return ENCODER.worker;
+    w.onerror = (e) => { w.terminate(); reject(new Error(e.message || 'encoder failed')); };
+    w.postMessage({ jobs: [job], sampleRate, bitrate }, [job.left.buffer, job.right.buffer]);
+  });
 }
 
-/** Encode AudioBuffers to MP3. `items` is [{name, buffer}]. */
-export function encodeMp3(items, onProgress) {
-  const w = encoder();
-  return new Promise((resolve, reject) => {
-    if (ENCODER.queue) return reject(new Error('an export is already running'));
-    ENCODER.queue = { resolve, reject, onProgress };
-    // Copy the channel data: the worker takes ownership of what it is sent, and
-    // the player still needs its buffers afterwards.
-    const jobs = items.map(({ name, buffer }) => ({
-      name,
-      left: buffer.getChannelData(0).slice(),
-      right: buffer.numberOfChannels > 1 ? buffer.getChannelData(1).slice()
-                                         : buffer.getChannelData(0).slice(),
-    }));
-    const transfer = jobs.flatMap((j) => [j.left.buffer, j.right.buffer]);
-    w.postMessage({ jobs, sampleRate: items[0].buffer.sampleRate }, transfer);
+async function runPool(jobs, sampleRate, bitrate, onProgress) {
+  const results = new Array(jobs.length);
+  const pcts = new Array(jobs.length).fill(0);
+  let next = 0;
+  const report = (i) => onProgress?.({
+    name: jobs[i].name, pct: pcts[i], index: i, total: jobs.length,
+    overall: Math.floor(pcts.reduce((a, b) => a + b, 0) / jobs.length),
   });
+  const worker = async () => {
+    while (next < jobs.length) {
+      const i = next++;
+      results[i] = await encodeOne(jobs[i], sampleRate, bitrate, (pct) => { pcts[i] = pct; report(i); });
+      pcts[i] = 100;
+      report(i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(MAX_WORKERS, jobs.length) }, worker));
+  return results;
+}
+
+/** Encode AudioBuffers to MP3. `items` is [{name, buffer}]; resolves to
+ *  [{name, bytes}] in the same order. `onProgress` gets {name, pct, index,
+ *  total, overall}. */
+export function encodeMp3(items, onProgress, { bitrate } = {}) {
+  // Copy the channel data: the worker takes ownership of what it is sent, and
+  // the player still needs its buffers afterwards.
+  const jobs = items.map(({ name, buffer }) => ({
+    name,
+    left: buffer.getChannelData(0).slice(),
+    right: buffer.numberOfChannels > 1 ? buffer.getChannelData(1).slice()
+                                       : buffer.getChannelData(0).slice(),
+  }));
+  return runPool(jobs, items[0].buffer.sampleRate, bitrate, onProgress);
 }
 
 /* ---------- mixdown ---------- */
@@ -84,12 +106,7 @@ export function mixdown(stems) {
 
 /** Encode raw stereo PCM (rather than an AudioBuffer) to MP3. */
 export function encodeMp3Pcm(name, left, right, sampleRate, onProgress) {
-  const w = encoder();
-  return new Promise((resolve, reject) => {
-    if (ENCODER.queue) return reject(new Error('an export is already running'));
-    ENCODER.queue = { resolve, reject, onProgress };
-    w.postMessage({ jobs: [{ name, left, right }], sampleRate }, [left.buffer, right.buffer]);
-  });
+  return runPool([{ name, left, right }], sampleRate, undefined, onProgress);
 }
 
 /* ---------- zip (store only) ---------- */

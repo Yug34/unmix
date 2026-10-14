@@ -133,6 +133,49 @@ kbd {
 
 .controls-note { margin: 14px 0 0; color: var(--dim); font-size: 13px; }
 
+/* ---- youtube ---- */
+.or {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 0 12px; color: var(--dim); font-size: 12.5px;
+}
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.yt-form { display: flex; gap: 8px; }
+.yt-input {
+  flex: 1; min-width: 0;
+  background: var(--card-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; font: inherit; font-size: 14px;
+}
+.yt-input:focus { outline: none; border-color: var(--accent-dim); }
+.yt-input::placeholder { color: #5f6775; }
+.btn:disabled { opacity: .5; cursor: default; filter: none; }
+
+/* ---- library ---- */
+.library-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.library-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.library-head .meta { margin: 0; }
+.library { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lib-item {
+  display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.lib-item:hover, .lib-item:focus-visible { background: var(--card-2); outline: none; }
+.lib-item.current { border-color: var(--accent-dim); background: var(--card-2); }
+.lib-icon { width: 18px; height: 18px; fill: var(--dim); }
+.lib-item.current .lib-icon { fill: var(--accent); }
+.lib-text { min-width: 0; }
+.lib-name { display: block; font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-sub { display: block; color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.lib-del {
+  background: transparent; border: none; color: var(--dim); cursor: pointer;
+  font: inherit; font-size: 16px; line-height: 1; padding: 4px 8px; border-radius: 6px;
+  opacity: 0;
+}
+.lib-item:hover .lib-del, .lib-item:focus-within .lib-del { opacity: 1; }
+.lib-del:hover { color: var(--danger); background: #2a1c1e; }
+@media (hover: none) { .lib-del { opacity: 1; } }
+
 .vol-wrap { display: flex; align-items: center; gap: 7px; }
 .vol-pct {
   width: 36px; text-align: right; color: var(--dim);

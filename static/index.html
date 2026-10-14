@@ -27,10 +27,27 @@
       <input type="file" id="file-input" accept="audio/*,video/*" hidden>
     </div>
 
+    <div class="or"><span>or paste a YouTube link</span></div>
+
+    <form id="yt-form" class="yt-form" autocomplete="off">
+      <input type="url" id="yt-url" class="yt-input" inputmode="url" spellcheck="false"
+             placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube link">
+      <button type="submit" id="yt-go" class="btn">Unmix</button>
+    </form>
+
     <p class="controls-note">
       Six stems &mdash; vocals, drums, bass, guitar, piano, other.
-      Runs entirely in this browser; nothing is uploaded.
+      Separation runs in this browser; a YouTube link only fetches the audio.
     </p>
+  </section>
+
+  <section id="library-card" class="card hidden">
+    <div class="library-head">
+      <h2>Library</h2>
+      <span id="library-meta" class="meta"></span>
+    </div>
+    <ul id="library-list" class="library"></ul>
+    <p class="hint">Stored in this browser. Clearing site data removes them.</p>
   </section>
 
   <section id="progress-card" class="card hidden">
@@ -44,7 +61,7 @@
 
   <section id="error-card" class="card error hidden">
     <p id="error-text"></p>
-    <button id="error-dismiss" class="btn ghost">Try another file</button>
+    <button id="error-dismiss" class="btn ghost">Try another</button>
   </section>
 
   <section id="player-card" class="card hidden">

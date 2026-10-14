@@ -1,10 +1,12 @@
 # split
 
-Drop in a song, get back separated tracks — vocals, drums, bass, guitar, piano and
-everything else — and play them together with per-stem mute, solo and volume.
+Drop in a song or paste a YouTube link, get back separated tracks — vocals, drums,
+bass, guitar, piano and everything else — and play them together with per-stem mute,
+solo and volume. Everything you've separated stays in a library in the browser.
 
-Everything runs in the browser. There is no server, no upload, and nothing to install.
-Your audio never leaves the machine.
+Separation runs in the browser. Uploaded audio never leaves the machine. The one
+server round-trip is fetching audio for a YouTube link, because the browser can't
+fetch YouTube media itself.
 
 ## Run it
 
@@ -12,13 +14,48 @@ Your audio never leaves the machine.
 python3 serve.py
 ```
 
-Then open <http://localhost:8000>. That's the whole setup — `serve.py` is stdlib-only,
-so there's no virtualenv and no dependencies.
+Then open <http://localhost:8000>. `serve.py` is stdlib-only, so there's no virtualenv
+and no dependencies for file uploads.
+
+For YouTube links locally, install yt-dlp and run `serve.py` with that Python:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install "yt-dlp[default]"
+.venv/bin/python serve.py
+```
 
 The first separation downloads the model once (130 MB, cached afterwards). After that
 it works offline. A 4-minute song takes roughly 100 seconds on Apple Silicon.
 
 You can install it from Chrome's address bar to get a dock icon and its own window.
+
+## YouTube links
+
+Paste a link into the field under the dropzone (pasting alone starts it). The page asks
+`/api/youtube`, which runs [yt-dlp](https://github.com/yt-dlp/yt-dlp) on the server,
+picks the best audio-only stream (m4a preferred — Safari can't decode webm/opus) and
+streams the bytes back. The browser decodes them exactly as it would an uploaded file;
+nothing is kept on the server.
+
+The server side is best-effort by nature:
+
+- YouTube sometimes answers datacenter IPs with a bot check. The error is shown as-is.
+  Setting `YTDLP_COOKIES` (contents of a Netscape `cookies.txt`) usually gets past it.
+- yt-dlp wants a JavaScript runtime (Deno or Node) to solve YouTube's challenges. Node
+  is enabled automatically when present. Without one, audio formats still resolve today,
+  with a warning.
+- `MAX_MINUTES` (default 20) rejects long videos before downloading. The app's own
+  8-minute memory warning still applies after decoding.
+
+## Library
+
+Every separation is saved to IndexedDB after the player comes up, as six 192 kbps MP3s
+(~35 MB for a four-minute song; PCM would be half a gigabyte). Reopening a track from
+the Library card decodes them back in about a second. Downloads from a reopened track
+are re-encoded from that MP3, so for archival quality use **All stems (.zip)** right
+after separating.
+
+The library is per-browser and per-origin. Clearing site data removes it.
 
 ## Making a custom mix
 
@@ -83,7 +120,15 @@ and files whose extension is simply wrong.
 
 ## Deploying
 
-It's a static site — any host works. The one requirement is the two cross-origin
+`vercel.json` is set up for Vercel: the static site from `static/`, the model fetched at
+build time, and `api/youtube.py` as a Python function (`requirements.txt` installs
+yt-dlp). Push and it deploys. Optional env vars: `YTDLP_COOKIES`, `YTDLP_PROXY`,
+`MAX_MINUTES`.
+
+The function streams its response, which is what gets a full song past Vercel's 4.5 MB
+cap on buffered function responses. `maxDuration` is 300 s, the Hobby-plan maximum.
+
+Any other host works for the static part. The one requirement is the two cross-origin
 isolation headers:
 
 ```
@@ -91,10 +136,11 @@ Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-Netlify, Cloudflare Pages and Vercel can all set them. For hosts that can't (GitHub
-Pages), `coi-serviceworker.js` is already wired up and handles it.
+Netlify and Cloudflare Pages can set them. For hosts that can't (GitHub Pages),
+`coi-serviceworker.js` is already wired up and handles it. Without the API, pasting a
+YouTube link shows an error and uploads keep working.
 
-`static/models/*.onnx` is gitignored. Fetch it before deploying:
+`static/models/*.onnx` is gitignored. Fetch it before deploying elsewhere:
 
 ```bash
 curl -L -o static/models/htdemucs_6s_fp16.onnx \
@@ -104,11 +150,13 @@ curl -L -o static/models/htdemucs_6s_fp16.onnx \
 ## Layout
 
 ```
-serve.py                     static server; exists to set two headers
-static/app.js                decode -> worker -> player -> downloads
+serve.py                     static server; sets two headers, proxies /api/youtube locally
+api/youtube.py               Vercel function: YouTube link -> streamed audio (yt-dlp)
+static/app.js                input (file or link) -> decode -> worker -> player -> library
+static/library.js            IndexedDB store for separated tracks
 static/separate.worker.js    ONNX session, windowing, overlap-add
-static/encode.worker.js      MP3 encoding (lamejs), off the main thread
-static/export.js             zip building and file saving
+static/encode.worker.js      MP3 encoding (lamejs), one worker per stem
+static/export.js             encoder pool, mixdown, zip building, file saving
 static/player.js             Web Audio multitrack player
 static/vendor/               onnxruntime-web, lamejs
 ```

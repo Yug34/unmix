@@ -1,0 +1,4 @@
+# For the Vercel Python function in api/youtube.py. Unpinned on purpose: YouTube
+# changes under yt-dlp constantly and every deploy should pick up the latest fix.
+# [default] pulls in yt-dlp-ejs, the JS challenge solver, plus requests/brotli.
+yt-dlp[default]

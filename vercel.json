@@ -1,6 +1,12 @@
 {
   "buildCommand": "mkdir -p static/models && curl -fsSL -o static/models/htdemucs_6s_fp16.onnx https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/main/htdemucs_6s_fp16weights.onnx",
   "outputDirectory": "static",
+  "functions": {
+    "api/youtube.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{static/**,.git/**,README.md,serve.py}"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

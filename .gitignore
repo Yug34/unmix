@@ -4,5 +4,9 @@ static/models/*.onnx
 # Local test fixtures
 static/_test/
 
+# Local yt-dlp for serve.py
+.venv/
+__pycache__/
+
 # OS noise
 .DS_Store

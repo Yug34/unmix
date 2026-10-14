@@ -19,8 +19,8 @@ function toInt16(f32) {
   return out;
 }
 
-function encodeMp3(left, right, sampleRate, onProgress) {
-  const enc = new lamejs.Mp3Encoder(2, sampleRate, BITRATE);
+function encodeMp3(left, right, sampleRate, bitrate, onProgress) {
+  const enc = new lamejs.Mp3Encoder(2, sampleRate, bitrate || BITRATE);
   const l = toInt16(left);
   const r = toInt16(right);
   const parts = [];
@@ -44,11 +44,11 @@ function encodeMp3(left, right, sampleRate, onProgress) {
 }
 
 self.onmessage = (e) => {
-  const { jobs, sampleRate } = e.data;   // [{name, left, right}]
+  const { jobs, sampleRate, bitrate } = e.data;   // [{name, left, right}]
   try {
     const results = [];
     jobs.forEach((job, i) => {
-      const bytes = encodeMp3(job.left, job.right, sampleRate, (pct) => {
+      const bytes = encodeMp3(job.left, job.right, sampleRate, bitrate, (pct) => {
         self.postMessage({ type: 'progress', name: job.name, pct, index: i, total: jobs.length });
       });
       results.push({ name: job.name, bytes });
