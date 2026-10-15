@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "split",
+  "version": "1.0.0",
+  "description": "Split a song into vocals, drums, bass, guitar, piano and other. Paste a YouTube link or drop a file.",
+  "minimum_chrome_version": "120",
+  "action": {
+    "default_title": "Open split"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "sandbox": {
+    "pages": ["sandbox.html"]
+  },
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'",
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  },
+  "permissions": ["unlimitedStorage", "tabs", "webRequest", "declarativeNetRequest"],
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "yt_headers", "enabled": true, "path": "rules.json" }
+    ]
+  },
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://music.youtube.com/*",
+    "https://youtu.be/*",
+    "https://*.youtube.com/*",
+    "https://*.googlevideo.com/*",
+    "https://youtubei.googleapis.com/*",
+    "https://huggingface.co/*",
+    "https://*.huggingface.co/*",
+    "https://*.hf.co/*",
+    "https://cas-bridge.xethub.hf.co/*"
+  ]
+}

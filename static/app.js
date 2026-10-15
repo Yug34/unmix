@@ -94,7 +94,133 @@ function looksLikeYouTube(s) {
   return /^(https?:\/\/)?((www|m|music)\.)?(youtube\.com\/(watch|shorts|embed|live|v)|youtu\.be\/)/i.test(s.trim());
 }
 
+function inExtension() {
+  return location.protocol === 'chrome-extension:';
+}
+
+/* The sandboxed iframe is the only context allowed to eval the player script.
+ * Messages go page <-> service worker <-> here. A window is the fallback when
+ * the isolated page refuses to embed the sandbox. */
+let sandboxWindow = null;
+let sandboxReady = null;
+
+function sandboxTarget() {
+  return new Promise((resolve, reject) => {
+    if (sandboxWindow && !sandboxWindow.closed) { resolve(sandboxWindow); return; }
+    if (sandboxReady) { sandboxReady.then(resolve, reject); return; }
+    sandboxReady = new Promise((res, rej) => {
+      const iframe = document.createElement('iframe');
+      iframe.hidden = true;
+      iframe.setAttribute('allow', 'cross-origin-isolated');
+      iframe.src = chrome.runtime.getURL('sandbox.html');
+      const giveUp = setTimeout(() => {
+        const popup = window.open(chrome.runtime.getURL('sandbox.html'), 'split-sandbox',
+                                   'width=1,height=1,left=-1000,top=-1000');
+        if (!popup) { rej(new Error('Could not open the decipher sandbox.')); return; }
+        sandboxWindow = popup;
+        res(popup);
+      }, 1500);
+      iframe.addEventListener('load', () => {
+        iframe.contentWindow.postMessage({ type: 'ping' }, '*');
+        const onPong = (event) => {
+          if (event.data?.type !== 'pong' || event.source !== iframe.contentWindow) return;
+          window.removeEventListener('message', onPong);
+          clearTimeout(giveUp);
+          sandboxWindow = iframe.contentWindow;
+          res(iframe.contentWindow);
+        };
+        window.addEventListener('message', onPong);
+      });
+      document.body.appendChild(iframe);
+    });
+    sandboxReady.then(resolve, reject);
+  });
+}
+
+function installExtensionBridge() {
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (data?.type !== 'eval-result') return;
+    chrome.runtime.sendMessage({
+      type: 'yt-eval-result', id: data.id, result: data.result, error: data.error,
+    });
+  });
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type !== 'yt-eval') return;
+    sandboxTarget().then((target) => {
+      target.postMessage({ type: 'eval', id: msg.id, output: msg.output }, '*');
+    }).catch((err) => {
+      chrome.runtime.sendMessage({ type: 'yt-eval-result', id: msg.id, error: String(err.message || err) });
+    });
+  });
+}
+
+function ensureExtensionModel(onProgress) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const port = chrome.runtime.connect({ name: 'model' });
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      try { port.disconnect(); } catch { /* already closed */ }
+      if (err) reject(err);
+      else resolve();
+    };
+    port.onMessage.addListener((msg) => {
+      if (msg.type === 'progress') onProgress(msg.pct, msg.stage);
+      else if (msg.type === 'done') finish();
+      else if (msg.type === 'error') finish(new Error(msg.error));
+    });
+    port.onDisconnect.addListener(() => {
+      if (!settled) finish(new Error(chrome.runtime.lastError?.message || 'The extension disconnected.'));
+    });
+    port.postMessage({ type: 'ensure' });
+  });
+}
+
+async function fetchYouTubeExtension(url, onProgress) {
+  const parts = [];
+  let meta = null;
+  await new Promise((resolve, reject) => {
+    const port = chrome.runtime.connect({ name: 'youtube' });
+    port.onMessage.addListener((msg) => {
+      if (msg.type === 'progress') onProgress(msg.pct, msg.stage);
+      else if (msg.type === 'meta') {
+        meta = msg;
+        els.progressName.textContent = msg.title;
+      } else if (msg.type === 'file') {
+        caches.open('split-youtube-v1').then(async (cache) => {
+          const hit = await cache.match(msg.key);
+          if (!hit) throw new Error('YouTube returned no audio for that link.');
+          parts.push(new Uint8Array(await hit.arrayBuffer()));
+          await cache.delete(msg.key);
+          port.disconnect();
+          resolve();
+        }).catch((err) => {
+          port.disconnect();
+          reject(err);
+        });
+      } else if (msg.type === 'error') {
+        port.disconnect();
+        reject(new Error(msg.error));
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      if (!meta) reject(new Error(chrome.runtime.lastError?.message || 'The extension disconnected.'));
+    });
+    port.postMessage({ type: 'start', url });
+  });
+  if (!meta) throw new Error('YouTube returned no audio for that link.');
+  return {
+    file: new File(parts, `${meta.title}.${meta.ext}`, { type: meta.mime }),
+    name: meta.title,
+    source: { kind: 'youtube', url, videoId: meta.videoId },
+    duration: meta.duration,
+  };
+}
+
 async function fetchYouTube(url, onProgress) {
+  if (inExtension()) return fetchYouTubeExtension(url, onProgress);
   onProgress(0, 'asking YouTube');
   const res = await fetch(`/api/youtube?url=${encodeURIComponent(url)}`);
   if (!res.ok) {
@@ -162,6 +288,8 @@ async function run(input) {
   }, 500);
 
   try {
+    if (inExtension()) await ensureExtensionModel(setProgress);
+
     let file = input.file;
     let name = input.file?.name;
     let source = { kind: 'upload' };
@@ -486,6 +614,8 @@ navigator.storage?.persist?.().catch(() => {});
 renderLibrary();
 
 /* ---------- capability check ---------- */
+
+if (inExtension()) installExtensionBridge();
 
 if (!self.crossOriginIsolated) {
   fail('This page is not cross-origin isolated, so separation would be very slow. ' +

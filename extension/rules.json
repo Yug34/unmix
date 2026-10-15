@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "set", "value": "https://www.youtube.com" },
+        { "header": "referer", "operation": "set", "value": "https://www.youtube.com/" }
+      ]
+    },
+    "condition": {
+      "requestDomains": ["youtube.com", "googlevideo.com", "youtubei.googleapis.com"],
+      "resourceTypes": ["xmlhttprequest", "other", "media"]
+    }
+  }
+]

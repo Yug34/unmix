@@ -29,6 +29,9 @@ if (typeof window === 'undefined') {
         .catch((err) => console.error(err)),
     );
   });
+} else if (location.protocol === 'chrome-extension:') {
+  // The extension manifest already sends the two headers. Registering here
+  // would fight the extension's own service worker and reload the tab.
 } else if (!window.crossOriginIsolated) {
   // --- page side: register, then reload once so the worker controls this page ---
   navigator.serviceWorker?.register(window.document.currentScript.src).then(

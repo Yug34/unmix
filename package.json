@@ -1,0 +1,25 @@
+{
+  "name": "unmix",
+  "version": "1.0.0",
+  "description": "Drop in a song or paste a YouTube link, get back separated tracks — vocals, drums, bass, guitar, piano and everything else — and play them together with per-stem mute, solo and volume. Everything you've separated stays in a library in the browser.",
+  "private": true,
+  "scripts": {
+    "ext": "node extension/build.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yug34/unmix.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Yug34/unmix/issues"
+  },
+  "homepage": "https://github.com/Yug34/unmix#readme",
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "youtubei.js": "^18.1.0"
+  }
+}

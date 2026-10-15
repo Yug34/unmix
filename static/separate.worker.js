@@ -12,6 +12,10 @@
 importScripts('/vendor/ort/ort.all.min.js');
 
 const MODEL_URL = '/models/htdemucs_6s_fp16.onnx';
+// Used when this worker runs inside the extension, where /models/ is not a
+// file. The extension service worker usually fills the cache first, because a
+// cross-origin-isolated worker can be refused the Hugging Face response.
+const MODEL_REMOTE = 'https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/main/htdemucs_6s_fp16weights.onnx';
 
 // Channel order of the model's output. NOT alphabetical, and not the order the
 // stems are displayed in -- verified by correlating against reference demucs.
@@ -52,15 +56,30 @@ const MODEL_CACHE = 'split-model-v1';
  * what Cache-Control says. Cache Storage has no such per-entry limit. */
 async function loadWeights(onStatus) {
   const cache = await caches.open(MODEL_CACHE);
-  const hit = await cache.match(MODEL_URL);
+  // The extension cannot cache a chrome-extension:// URL, so the remote https
+  // URL is the key there. The site keeps the local path.
+  const key = location.protocol === 'chrome-extension:' ? MODEL_REMOTE : MODEL_URL;
+  const hit = await cache.match(key);
   if (hit) {
     onStatus('loading model (cached)');
     return new Uint8Array(await hit.arrayBuffer());
   }
 
   onStatus('downloading model (first run only)');
-  const res = await fetch(MODEL_URL);
-  if (!res.ok) throw new Error(`could not fetch the model (${res.status})`);
+  const source = key;
+  let res;
+  try {
+    res = await fetch(source);
+  } catch (err) {
+    const late = await cache.match(MODEL_URL);
+    if (late) return new Uint8Array(await late.arrayBuffer());
+    throw err;
+  }
+  if (!res.ok) {
+    const late = await cache.match(MODEL_URL);
+    if (late) return new Uint8Array(await late.arrayBuffer());
+    throw new Error(`could not fetch the model (${res.status})`);
+  }
   await cache.put(MODEL_URL, res.clone());
 
   // Read with progress: this is a 130 MB download and silence looks like a hang.

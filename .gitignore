@@ -8,5 +8,9 @@ static/_test/
 .venv/
 __pycache__/
 
+# Extension build output and the bundler
+node_modules/
+extension/app/
+
 # OS noise
 .DS_Store
